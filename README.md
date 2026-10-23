@@ -11,7 +11,26 @@
 
 ## 使用
 
-在每台有权限访问公开 GitHub 仓库的 Linux VPS 上，可直接下载并启动（安装到本地目录）：
+### 配置短域名（仅需一次）
+
+仓库维护者需要在 Cloudflare 账号中为 `ssh-toolbox.alebot.ggff.net` 部署 Worker。仓库已提供 Worker 配置：
+
+```bash
+npx wrangler login
+npx wrangler deploy
+```
+
+部署账户必须管理 `alebot.ggff.net` 所属 Cloudflare Zone，并允许为该子域名创建 Worker Custom Domain。Worker 会将 HTTP 请求重定向到 HTTPS，并仅在根路径返回最新版安装脚本。若 DNS/TLS 证书还在配置中，请等待 Cloudflare 激活 Custom Domain 后再使用。
+
+### 在每台 VPS 上启动
+
+短域名启用后，在每台 Linux VPS 上执行：
+
+```bash
+bash <(curl -Ls ssh-toolbox.alebot.ggff.net)
+```
+
+如果尚未配置短域名，也可以直接使用 GitHub Raw 地址：
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/testdogbot/ssh-toolbox/main/install.sh)
@@ -45,6 +64,7 @@ bash toolbox.sh
 
 ```bash
 bash tests/test_module_smoke.sh
+node --test tests/test_short_link_worker.mjs
 ```
 
 该检查验证所有 Shell 文件语法，并确认主菜单引用的模块及入口函数可加载。

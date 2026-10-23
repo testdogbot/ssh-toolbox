@@ -15,9 +15,10 @@
 
 ```bash
 bash tests/test_module_smoke.sh
+node --test tests/test_short_link_worker.mjs
 ```
 
-该测试验证 Bash 语法、CLI 帮助、模块入口加载、包管理失败传播和统计关闭行为。涉及发行版包管理、systemd、Docker 或防火墙的变更，还需在相应 Linux 环境做针对性验证；不要把 Windows Bash 语法测试描述成 VPS 集成测试。
+Shell 测试验证 Bash 语法、CLI 帮助、模块入口加载、包管理失败传播和统计关闭行为；Node.js 测试验证短链接 Worker。涉及发行版包管理、systemd、Docker 或防火墙的变更，还需在相应 Linux 环境做针对性验证；不要把 Windows Bash 语法测试描述成 VPS 集成测试。
 
 ## 安全与隐私
 
