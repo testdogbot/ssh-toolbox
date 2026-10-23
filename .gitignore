@@ -1,0 +1,10 @@
+.vscode/
+.env
+.env.*
+!.env.example
+*.log
+*.swp
+*.swo
+*.bak
+*.tmp
+__pycache__/
