@@ -16,11 +16,13 @@
 仓库维护者需要在 Cloudflare 账号中为 `ssh-toolbox.alebot.ggff.net` 部署 Worker。仓库已提供 Worker 配置：
 
 ```bash
+git clone https://github.com/testdogbot/ssh-toolbox.git
+cd ssh-toolbox
 npx wrangler login
 npx wrangler deploy
 ```
 
-部署账户必须管理 `alebot.ggff.net` 所属 Cloudflare Zone，并允许为该子域名创建 Worker Custom Domain。Worker 会将 HTTP 请求重定向到 HTTPS，并仅在根路径返回最新版安装脚本。若 DNS/TLS 证书还在配置中，请等待 Cloudflare 激活 Custom Domain 后再使用。
+部署环境需要 Node.js/npm；部署账户必须管理 `alebot.ggff.net` 所属 Cloudflare Zone，并允许为该子域名创建 Worker Custom Domain。Worker 会将 HTTP 请求重定向到 HTTPS，并仅在根路径返回最新版安装脚本。若 DNS/TLS 证书还在配置中，请等待 Cloudflare 激活 Custom Domain 后再使用。
 
 ### 在每台 VPS 上启动
 
