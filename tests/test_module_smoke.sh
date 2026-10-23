@@ -4,7 +4,7 @@ set -eu
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-for file in toolbox.sh lib/*.sh modules/*.sh scripts/*.sh tests/*.sh update_log.sh; do
+for file in toolbox.sh install.sh lib/*.sh modules/*.sh scripts/*.sh tests/*.sh update_log.sh; do
     [ "$file" = "scripts/check_x86-64_psabi.sh" ] && continue
     bash -n "$file"
 done
@@ -131,5 +131,74 @@ if firewall_valid_port 0 || firewall_valid_port 65536 || firewall_valid_port abc
     echo "Firewall port validation accepted an invalid port." >&2
     exit 1
 fi
+
+installer_test_root=$(mktemp -d)
+trap 'rm -rf -- "$installer_test_root"' EXIT
+fixture_root="${installer_test_root}/fixture/ssh-toolbox-main"
+mock_bin="${installer_test_root}/bin"
+mkdir -p "$fixture_root/modules" "$mock_bin" "${installer_test_root}/home"
+printf '#!/bin/bash\necho "fixture toolbox launched"\n' > "${fixture_root}/toolbox.sh"
+touch "${fixture_root}/modules/fixture.sh"
+tar -czf "${installer_test_root}/fixture.tar.gz" -C "${installer_test_root}/fixture" ssh-toolbox-main
+cat > "${mock_bin}/curl" <<'MOCK_CURL'
+#!/bin/bash
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = "-o" ] && [ "$#" -gt 1 ]; then
+        cp "$SSH_TOOLBOX_TEST_ARCHIVE" "$2"
+        exit
+    fi
+    shift
+done
+exit 1
+MOCK_CURL
+chmod +x "${mock_bin}/curl"
+
+installer_output=$(
+    HOME="${installer_test_root}/home" \
+    PATH="${mock_bin}:${PATH}" \
+    SUDO_USER= \
+    SSH_TOOLBOX_TEST_ARCHIVE="${installer_test_root}/fixture.tar.gz" \
+    bash install.sh
+)
+[[ "$installer_output" == *"fixture toolbox launched"* ]] || {
+    echo "Installer failed to launch the installed toolbox." >&2
+    exit 1
+}
+installed_dir="${installer_test_root}/home/.local/share/ssh-toolbox"
+[ -f "${installed_dir}/.ssh-toolbox-managed" ] || {
+    echo "Installer did not mark the managed installation." >&2
+    exit 1
+}
+
+installer_output=$(
+    HOME="${installer_test_root}/home" \
+    PATH="${mock_bin}:${PATH}" \
+    SUDO_USER= \
+    SSH_TOOLBOX_TEST_ARCHIVE="${installer_test_root}/fixture.tar.gz" \
+    bash install.sh
+)
+[[ "$installer_output" == *"Previous installation preserved at"* ]] || {
+    echo "Installer failed to preserve the previous installation." >&2
+    exit 1
+}
+
+unmanaged_home="${installer_test_root}/unmanaged-home"
+mkdir -p "${unmanaged_home}/.local/share/ssh-toolbox"
+printf 'keep\n' > "${unmanaged_home}/.local/share/ssh-toolbox/user-data"
+if HOME="$unmanaged_home" \
+    PATH="${mock_bin}:${PATH}" \
+    SUDO_USER= \
+    SSH_TOOLBOX_TEST_ARCHIVE="${installer_test_root}/fixture.tar.gz" \
+    bash install.sh >/dev/null 2>&1; then
+    echo "Installer overwrote an unmanaged directory." >&2
+    exit 1
+fi
+[ "$(cat "${unmanaged_home}/.local/share/ssh-toolbox/user-data")" = "keep" ] || {
+    echo "Installer changed data in an unmanaged directory." >&2
+    exit 1
+}
+
+trap - EXIT
+rm -rf -- "$installer_test_root"
 
 echo "Shell syntax and main-menu module smoke tests passed."

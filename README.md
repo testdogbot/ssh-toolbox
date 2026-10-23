@@ -11,6 +11,16 @@
 
 ## 使用
 
+在每台有权限访问公开 GitHub 仓库的 Linux VPS 上，可直接下载并启动（安装到本地目录）：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/testdogbot/ssh-toolbox/main/install.sh)
+```
+
+该入口会下载 `main` 分支并安装到 `/opt/ssh-toolbox`（使用 `sudo` 时）或 `~/.local/share/ssh-toolbox`，然后启动菜单。再次运行会更新由本安装器管理的目录，并保留上一版本备份。不要对已有但非本安装器管理的同名目录运行；安装器会拒绝覆盖。该方式依赖 VPS 能通过 HTTPS 访问 GitHub。
+
+如果项目已经克隆到服务器，也可直接启动：
+
 ```bash
 bash toolbox.sh
 ```
