@@ -37,7 +37,7 @@ while true; do
             echo -e "${red}输入错误, 请输入0~10的数字!${re}"
             continue
         fi
-        if [ $sub_choice -ge 0 -a $sub_choice -le 12 ]; then
+        if [ "$sub_choice" -ge 0 ] && [ "$sub_choice" -le 10 ]; then
             break
         else
             echo -e "${red}输入错误, 请输入0~10的数字!${re}"
@@ -234,7 +234,11 @@ while true; do
                 1) lxc list ;;
                 2) read -p "请输入容器名: " name; lxc start "$name" ;;
                 3) read -p "请输入容器名: " name; lxc stop "$name" ;;
-                4) read -p "请输入容器名: " name; lxc delete "$name" --force ;;
+                4)
+                    read -r -p "请输入容器名: " name
+                    [ -n "$name" ] && confirm_action "永久删除 LXC 容器 ${name}?" &&
+                        lxc delete "$name" --force
+                    ;;
                 5) read -p "请输入容器名: " name; lxc exec "$name" -- bash ;;
                 6) lxc list --format csv -c n,s,m,c,t ;;
                 0) ;;
@@ -369,7 +373,11 @@ while true; do
                 1) incus list ;;
                 2) read -p "请输入容器名: " name; incus start "$name" ;;
                 3) read -p "请输入容器名: " name; incus stop "$name" ;;
-                4) read -p "请输入容器名: " name; incus delete "$name" --force ;;
+                4)
+                    read -r -p "请输入容器名: " name
+                    [ -n "$name" ] && confirm_action "永久删除 Incus 容器 ${name}?" &&
+                        incus delete "$name" --force
+                    ;;
                 5) read -p "请输入容器名: " name; incus exec "$name" -- bash ;;
                 0) ;;
             esac

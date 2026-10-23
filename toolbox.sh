@@ -90,25 +90,24 @@ toolbox_update() {
     clear
     echo -e "${gl_kjlan}当前版本: v${TOOLBOX_VERSION}${gl_bai}"
     echo "------------------------"
-    echo "1. 现在检查更新"
-    echo "2. 开启自动更新"
-    echo "3. 关闭自动更新"
+    echo "1. 检查并安装最新版本"
     echo "0. 返回主菜单"
     echo "------------------------"
     read -p "请输入你的选择: " sub_choice
     case $sub_choice in
         1)
             clear
-            echo "当前项目尚未配置受信任的发布源，无法检查更新。"
-            echo "请通过项目发布渠道核实版本后再手动更新。"
-            ;;
-        2)
-            echo "自动更新尚未实现，未更改任何设置。"
-            ;;
-        3)
-            echo "自动更新尚未实现，未更改任何设置。"
+            if [ ! -f "${SCRIPT_DIR}/.ssh-toolbox-managed" ]; then
+                echo "当前目录不是由安装器管理的安装，无法安全地原位更新。"
+                echo "请从短域名或 GitHub 安装入口重新运行安装器。"
+                return 1
+            fi
+            echo "正在从 GitHub main 分支更新工具箱；旧版本会保留为备份。"
+            bash "${SCRIPT_DIR}/install.sh" --update "$SCRIPT_DIR"
+            return $?
             ;;
         0) ;;
+        *) echo "无效的输入。" ;;
     esac
 }
 

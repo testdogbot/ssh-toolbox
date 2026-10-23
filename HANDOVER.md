@@ -39,7 +39,7 @@
 | 3 | 构建核心框架 | ✅ 完成 | 创建了 `toolbox.sh`(7.1KB)、`lib/common.sh`(11.1KB)、`lib/stats.sh`(1.5KB)、`lib/i18n.sh`(1.4KB) |
 | 4 | ssh_tool 独有模块 | ✅ 完成 | 7个模块文件：component_manage、warp_manager、node_setup、test_scripts、oracle_cloud、env_manage、nat_vm |
 | 5 | 重叠功能模块 | ✅ 基础入口完成 | 11 个模块已创建；按系统能力范围实现，不等同于上游全量功能 |
-| 6 | 独有功能模块 | 🔶 部分完成 | AI、网络优化、游戏、集群和应用入口已创建；KPanel 自动部署与完整应用目录仍待可信模板 |
+| 6 | 独有功能模块 | 🔶 部分完成 | AI、网络优化、游戏和集群入口已创建；KPanel 容器管理与本地应用市场可用；自动部署和远程应用目录未接入 |
 | 7 | 文档编写 | ✅ 基础文档完成 | README.md、CONTRIBUTING.md、update_log.sh 已有 |
 | 8 | 交接文档 | ✅ 本次 | 本文档 |
 
@@ -87,8 +87,8 @@ D:/ssh-toolbox/                          (项目根目录)
 │   │
 │   ├── ai_tools.sh                ✅ [kejilion] AI 工具脚本入口
 │   ├── network_optimize.sh        ✅ [kejilion] 网络优化脚本入口
-│   ├── kpanel.sh                  🔶 [kejilion] 状态查询；未提供自动部署器
-│   ├── app_market.sh              🔶 本地 apps/*.sh 脚本入口；目录当前为空
+│   ├── kpanel.sh                  🔶 [kejilion] 管理已有容器；未提供自动部署器
+│   ├── app_market.sh              🔶 本地 apps/*.sh 和 scripts/*.sh 脚本市场
 │   ├── games_server.sh            ✅ [kejilion] 游戏管理脚本入口
 │   └── cluster.sh                 ✅ [ssh_tool] SSH config 别名连接
 │
@@ -156,7 +156,7 @@ D:/ssh-toolbox/                          (项目根目录)
 | 16 | 服务器集群控制 ▶ | ssh_tool | modules/cluster.sh | ✅ |
 | 17 | AI 工具管理 ▶ | kejilion | modules/ai_tools.sh | ✅ |
 | 18 | 网络优化 ▶ | kejilion | modules/network_optimize.sh | ✅ |
-| 19 | KPanel Web 面板 ▶ | kejilion | modules/kpanel.sh | 🔶 状态查询；自动部署待补 |
+| 19 | KPanel Web 面板 ▶ | kejilion | modules/kpanel.sh | 🔶 容器管理；自动部署待补 |
 | 20 | 游戏开服脚本 ▶ | kejilion | modules/games_server.sh | ✅ |
 | 00 | 脚本更新 | - | (toolbox.sh 内置) | ✅ |
 | 88 | 退出 | - | (toolbox.sh 内置) | ✅ |
@@ -230,10 +230,10 @@ D:/ssh-toolbox/                          (项目根目录)
 
 ### 5.2 尚未完成的功能
 
-- KPanel 自动部署：当前没有随项目提供、经核实的安装模板；入口只检查容器和显示说明。
-- 应用市场：`apps/` 目录目前为空，只允许运行本地 `.sh` 文件；没有恢复上游应用目录。
+- KPanel：已有容器支持查看、启动、停止、重启、日志和资源查看；自动部署仍未集成，需按官方文档部署以避免覆盖已有服务。
+- 应用市场：可列出并运行项目 `apps/` 与 `scripts/` 下的本地 `.sh` 脚本；当前不提供远程应用仓库或自动安装第三方应用。
 - 多语言：`i18n/cn/messages.sh` 和 `i18n/en/messages.sh` 已建立基础键，主菜单仍以中文为主，尚未完成全量接入。
-- 在线更新/自动更新：未配置可信发布源，界面明确告知不可用，不会假报“已是最新”或修改自动更新设置。
+- 在线更新：已安装工具箱可通过主菜单 `00` 调用安装器更新到 GitHub `main`，替换前备份旧目录；源码克隆目录拒绝原位更新。自动更新计划任务仍未实现，菜单会明确提示且不更改系统设置。
 - 破坏性功能：系统重装未集成；LDNMP 上游脚本会变更系统和防火墙，入口会提示并要求确认。
 
 ### 5.3 验证状态
@@ -247,6 +247,10 @@ D:/ssh-toolbox/                          (项目根目录)
 - Python 最新版本从 Python.org 下载页提取；安装到 `/usr/local/python3`，不会替换 `/usr/bin/python3`；卸载仅清理该独立目录及指向该目录的工具箱链接。
 - Node.js 和 Java 卸载不再删除用户目录、全局模块目录或整个 JVM 路径；Go 仅在命令确认为 `/usr/local/go` 安装时清理，并使用独立的工具箱 PATH 配置文件。
 - 批量删除 KVM/Docker 必须输入 `DELETE`；KVM 操作不再清空全局 iptables 表、重启网络或删除工作目录通配文件。Docker 新建容器不再使用固定密码，凭据写入权限为 600 的 root 凭据文件。
+- NAT 主菜单只接受显示的 0–10 选项；删除单个 LXC/Incus 容器会再次确认。
+- WARP 菜单不再把文档占位符当作参数传入；下载的脚本会先做 Bash 语法检查、展示来源并请求确认，临时文件在结束或取消后清理。
+- KPanel 菜单完善已有容器的操作；应用市场可运行 `apps/` 与 `scripts/` 中的本地脚本并在执行前确认。
+- 已安装工具箱可通过菜单 `00` 更新 GitHub `main`，更新前保留备份；源码目录与非受管理目录不会被原位替换。
 - 测试中加入对以上菜单返回、文件保留和删除保护行为的回归检查。
 
 ---

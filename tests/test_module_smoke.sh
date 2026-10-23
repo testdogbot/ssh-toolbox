@@ -3,6 +3,7 @@ set -eu
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+SCRIPT_DIR="$ROOT_DIR"
 
 for file in toolbox.sh install.sh lib/*.sh modules/*.sh scripts/*.sh tests/*.sh update_log.sh; do
     [ "$file" = "scripts/check_x86-64_psabi.sh" ] && continue
@@ -89,6 +90,12 @@ for menu in component_manage_menu env_manage_menu nat_vm_menu node_setup_menu or
         exit 1
     fi
 done
+
+nat_invalid_choice_output=$(nat_vm_menu <<< $'11\n0' 2>&1)
+[[ "$nat_invalid_choice_output" == *"请输入0~10的数字"* ]] || {
+    echo "NAT menu accepted an out-of-range selection." >&2
+    exit 1
+}
 
 stale_function_called=0
 stale_function() { stale_function_called=1; }
@@ -218,6 +225,35 @@ iptables() { : > "${nat_test_root}/iptables.called"; }
 }
 unset -f qm iptables
 
+lxc_test_root="${shortcut_test_root}/lxc"
+mkdir -p "$lxc_test_root"
+lxc() {
+    printf '%s\n' "$*" >> "${lxc_test_root}/lxc.log"
+}
+(cd "$lxc_test_root" && nat_vm_menu <<< $'6\n4\ntest-container\nn\n0' >/dev/null 2>&1)
+[ ! -e "${lxc_test_root}/lxc.log" ] || {
+    echo "LXC deletion proceeded without confirmation." >&2
+    exit 1
+}
+(cd "$lxc_test_root" && nat_vm_menu <<< $'6\n4\ntest-container\ny\n0' >/dev/null 2>&1)
+grep -q '^delete test-container --force$' "${lxc_test_root}/lxc.log" || {
+    echo "Confirmed LXC deletion did not target the requested container." >&2
+    exit 1
+}
+unset -f lxc
+
+incus_test_root="${shortcut_test_root}/incus"
+mkdir -p "$incus_test_root"
+incus() {
+    printf '%s\n' "$*" >> "${incus_test_root}/incus.log"
+}
+(cd "$incus_test_root" && nat_vm_menu <<< $'10\n4\ntest-container\ny\n0' >/dev/null 2>&1)
+grep -q '^delete test-container --force$' "${incus_test_root}/incus.log" || {
+    echo "Confirmed Incus deletion did not target the requested container." >&2
+    exit 1
+}
+unset -f incus
+
 docker() {
     case "$1 $2" in
         "ps -aq") printf 'container-one\ncontainer-two\n' ;;
@@ -235,6 +271,75 @@ grep -q '^container-two$' "${nat_test_root}/docker.log" || {
     exit 1
 }
 unset -f docker
+
+warp_test_root="${shortcut_test_root}/warp"
+mkdir -p "$warp_test_root"
+printf '#!/bin/bash\nprintf "executed\\n" > "$WARP_TEST_MARKER"\n' > "${warp_test_root}/remote.sh"
+curl() {
+    local destination=""
+    while [ "$#" -gt 0 ]; do
+        if [ "$1" = "-o" ] && [ "$#" -gt 1 ]; then
+            destination="$2"
+            shift 2
+        else
+            shift
+        fi
+    done
+    cp "${warp_test_root}/remote.sh" "$destination"
+    printf '%s\n' "$destination" > "${warp_test_root}/temp-path"
+}
+WARP_TEST_MARKER="${warp_test_root}/ran"
+export WARP_TEST_MARKER
+warp_menu <<<"n" >/dev/null 2>&1
+[ ! -e "$WARP_TEST_MARKER" ] &&
+    [ ! -e "$(cat "${warp_test_root}/temp-path")" ] || {
+    echo "WARP manager ignored cancellation or failed temporary-file cleanup." >&2
+    exit 1
+}
+warp_menu <<<"y" >/dev/null 2>&1
+[ "$(cat "$WARP_TEST_MARKER")" = "executed" ] &&
+    [ ! -e "$(cat "${warp_test_root}/temp-path")" ] || {
+    echo "WARP manager failed to run the confirmed script or clean up." >&2
+    exit 1
+}
+unset WARP_TEST_MARKER
+unset -f curl
+
+market_test_root="${shortcut_test_root}/market"
+mkdir -p "${market_test_root}/apps" "${market_test_root}/scripts"
+printf '#!/bin/bash\necho "market fixture executed"\n' > "${market_test_root}/apps/demo.sh"
+previous_script_dir="$SCRIPT_DIR"
+SCRIPT_DIR="$market_test_root"
+market_output=$(app_market_menu <<< $'1\ny')
+SCRIPT_DIR="$previous_script_dir"
+[[ "$market_output" == *"market fixture executed"* ]] || {
+    echo "Local application market failed to launch a selected script." >&2
+    exit 1
+}
+
+kpanel_test_root="${shortcut_test_root}/kpanel"
+mkdir -p "$kpanel_test_root"
+docker() {
+    case "$1 $2" in
+        "ps -aq") printf 'kpanel-container\n' ;;
+        "ps -a") printf 'CONTAINER ID NAMES STATUS\nkpanel-container kpanel Up\n' ;;
+        "start kpanel-container"|"stop kpanel-container"|"restart kpanel-container"|"logs --tail"|"stats --no-stream")
+            printf '%s\n' "$*" >> "${kpanel_test_root}/docker.log"
+            ;;
+    esac
+}
+kpanel_menu <<< $'2\nn\n0' >/dev/null 2>&1
+[ ! -e "${kpanel_test_root}/docker.log" ] || {
+    echo "KPanel container management ignored a cancelled confirmation." >&2
+    exit 1
+}
+kpanel_menu <<< $'2\ny\n0' >/dev/null 2>&1
+grep -q '^start kpanel-container$' "${kpanel_test_root}/docker.log" || {
+    echo "KPanel manager failed to start the selected container." >&2
+    exit 1
+}
+unset -f docker
+
 rm -rf -- "$shortcut_test_root"
 
 firewall_valid_port 1 && firewall_valid_port 65535 || {
@@ -252,6 +357,7 @@ fixture_root="${installer_test_root}/fixture/ssh-toolbox-main"
 mock_bin="${installer_test_root}/bin"
 mkdir -p "$fixture_root/modules" "$mock_bin" "${installer_test_root}/home"
 printf '#!/bin/bash\necho "fixture toolbox launched"\n' > "${fixture_root}/toolbox.sh"
+cp install.sh "${fixture_root}/install.sh"
 touch "${fixture_root}/modules/fixture.sh"
 tar -czf "${installer_test_root}/fixture.tar.gz" -C "${installer_test_root}/fixture" ssh-toolbox-main
 cat > "${mock_bin}/curl" <<'MOCK_CURL'
@@ -296,6 +402,19 @@ installer_output=$(
     exit 1
 }
 
+installer_output=$(
+    HOME="${installer_test_root}/home" \
+    PATH="${mock_bin}:${PATH}" \
+    SUDO_USER= \
+    SSH_TOOLBOX_TEST_ARCHIVE="${installer_test_root}/fixture.tar.gz" \
+    bash install.sh --update "$installed_dir"
+)
+[[ "$installer_output" == *"Previous installation preserved at"* &&
+    "$installer_output" == *"fixture toolbox launched"* ]] || {
+    echo "In-place updater failed to update and launch the managed installation." >&2
+    exit 1
+}
+
 unmanaged_home="${installer_test_root}/unmanaged-home"
 mkdir -p "${unmanaged_home}/.local/share/ssh-toolbox"
 printf 'keep\n' > "${unmanaged_home}/.local/share/ssh-toolbox/user-data"
@@ -311,6 +430,14 @@ fi
     echo "Installer changed data in an unmanaged directory." >&2
     exit 1
 }
+
+unmanaged_update_dir="${installer_test_root}/unmanaged-update"
+mkdir -p "$unmanaged_update_dir"
+if SSH_TOOLBOX_TEST_ARCHIVE="${installer_test_root}/fixture.tar.gz" \
+    bash install.sh --update "$unmanaged_update_dir" >/dev/null 2>&1; then
+    echo "Updater accepted a directory not managed by SSH Toolbox." >&2
+    exit 1
+fi
 
 trap - EXIT
 rm -rf -- "$installer_test_root"

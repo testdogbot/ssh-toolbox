@@ -40,6 +40,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/testdogbot/ssh-toolbox/main/
 
 该入口会下载 `main` 分支并安装到 `/opt/ssh-toolbox`（使用 `sudo` 时）或 `~/.local/share/ssh-toolbox`，然后启动菜单。再次运行会更新由本安装器管理的目录，并保留上一版本备份。不要对已有但非本安装器管理的同名目录运行；安装器会拒绝覆盖。该方式依赖 VPS 能通过 HTTPS 访问 GitHub。
 
+已安装的工具箱可以在主菜单选择 `00` 更新到 GitHub `main`，更新前会保留旧版本备份。自动更新计划任务尚未实现；从源码克隆运行的开发目录不会被原位更新，需重新运行安装入口。
+
 如果项目已经克隆到服务器，也可直接启动：
 
 ```bash
@@ -56,13 +58,15 @@ bash toolbox.sh
 - `lib/`：公共函数、语言和统计功能
 - `scripts/`：独立的安装/管理辅助脚本
 - `config/`：服务配置模板
-- `apps/`：可选的本地应用脚本目录
+- `apps/`：可选的本地应用脚本目录；应用市场也可列出并运行 `scripts/` 中的本地辅助脚本
 
-部分上游安装器会更改系统配置或从网络获取代码。运行前请阅读对应脚本；LDNMP 安装脚本会重置 iptables 默认策略。KPanel 自动部署和系统重装入口目前明确不执行操作。
+部分上游安装器会更改系统配置或从网络获取代码。运行前请阅读对应脚本；LDNMP 安装脚本会重置 iptables 默认策略。KPanel 菜单可管理已有容器（启动、停止、重启、日志和资源查看），但不会自动部署；系统重装入口仅提供说明，不执行重装。
 
 统计默认关闭（`ENABLE_STATS=false`），关闭时不会请求在线运行次数接口。系统语言环境不会被程序强行改写。快捷命令 `k` 和 `toolbox` 指向当前项目的 `toolbox.sh`，不会切换到其他上游脚本。
 
-NAT 管理中的“删除所有 KVM/Docker”属于不可逆操作，必须输入 `DELETE` 才会继续。删除 KVM 不会清空宿主机防火墙规则、重启网络或删除当前目录文件；Docker 批量删除会影响宿主机上的全部容器。新建 Docker 小鸡使用随机 root 密码，凭据保存在 `/root/ssh-toolbox-vm-credentials.txt`，请妥善保管。环境管理仅卸载由对应系统包管理器管理的 Node.js/Java 包；Python 保留系统解释器，Go 只清理工具箱约定路径。
+NAT 管理中的“删除所有 KVM/Docker”属于不可逆操作，必须输入 `DELETE` 才会继续；删除单个 LXC/Incus 容器也会二次确认。删除 KVM 不会清空宿主机防火墙规则、重启网络或删除当前目录文件；Docker 批量删除会影响宿主机上的全部容器。新建 Docker 小鸡使用随机 root 密码，凭据保存在 `/root/ssh-toolbox-vm-credentials.txt`，请妥善保管。环境管理仅卸载由对应系统包管理器管理的 Node.js/Java 包；Python 保留系统解释器，Go 只清理工具箱约定路径。
+
+WARP 入口会先下载并做 Bash 语法检查，展示第三方脚本来源并要求确认后才运行；脚本下载到临时文件，完成或取消后都会清理。请只运行你信任的第三方脚本。
 
 ## 验证
 

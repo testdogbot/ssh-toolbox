@@ -4,7 +4,25 @@ set -euo pipefail
 REPOSITORY="testdogbot/ssh-toolbox"
 BRANCH="main"
 
-if [ -n "${SUDO_USER:-}" ] && [ "$EUID" -eq 0 ]; then
+UPDATE_MODE=false
+if [ "${1:-}" = "--update" ]; then
+    UPDATE_MODE=true
+    shift
+fi
+
+if [ "$UPDATE_MODE" = true ]; then
+    update_target="${1:-$(dirname "${BASH_SOURCE[0]}")}"
+    if [ ! -d "$update_target" ]; then
+        printf 'Update target is not a directory: %s\n' "$update_target" >&2
+        exit 1
+    fi
+    INSTALL_DIR="$(cd "$update_target" && pwd)"
+    [ "$#" -eq 0 ] || shift
+    if [ ! -f "${INSTALL_DIR}/.ssh-toolbox-managed" ]; then
+        printf 'Refusing to update an installation not managed by SSH Toolbox: %s\n' "$INSTALL_DIR" >&2
+        exit 1
+    fi
+elif [ -n "${SUDO_USER:-}" ] && [ "$EUID" -eq 0 ]; then
     INSTALL_DIR="/opt/ssh-toolbox"
 else
     INSTALL_DIR="${HOME}/.local/share/ssh-toolbox"
