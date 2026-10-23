@@ -77,6 +77,19 @@ app_market app_market_menu
 firewall firewall_menu
 MODULES
 
+clear() { :; }
+break_end() { :; }
+if declare -F main_menu >/dev/null; then
+    echo "Recursive main_menu helper should not be present." >&2
+    exit 1
+fi
+for menu in component_manage_menu env_manage_menu nat_vm_menu node_setup_menu oracle_cloud_menu test_scripts_menu; do
+    if ! "$menu" <<<"0" >/dev/null 2>&1; then
+        echo "Menu did not return cleanly on choice 0: $menu" >&2
+        exit 1
+    fi
+done
+
 stale_function_called=0
 stale_function() { stale_function_called=1; }
 if run_module missing_module stale_function >/dev/null 2>&1; then
@@ -123,6 +136,107 @@ sum_run_times
 }
 unset -f curl
 
+shortcut_test_root=$(mktemp -d)
+trap 'rm -rf -- "${shortcut_test_root:-}" "${installer_test_root:-}"' EXIT
+shortcut_entrypoint="${shortcut_test_root}/toolbox.sh"
+shortcut_path="${shortcut_test_root}/bin/toolbox.sh"
+mkdir -p "${shortcut_test_root}/bin"
+printf '#!/bin/bash\n' > "$shortcut_entrypoint"
+printf 'keep existing command\n' > "${shortcut_test_root}/bin/k"
+create_shortcut_at "$shortcut_path" "$shortcut_entrypoint" k K free-alias >/dev/null 2>&1 || {
+    echo "Shortcut setup failed." >&2
+    exit 1
+}
+[ "$(cat "${shortcut_test_root}/bin/k")" = "keep existing command" ] || {
+    echo "Shortcut setup overwrote an existing command." >&2
+    exit 1
+}
+[ -e "${shortcut_test_root}/bin/free-alias" ] || {
+    echo "Shortcut setup did not create the free alias." >&2
+    exit 1
+}
+grep -q '^# SSH_TOOLBOX_MANAGED_WRAPPER$' "$shortcut_path" || {
+    echo "Generated shortcut is missing its ownership marker." >&2
+    exit 1
+}
+
+printf '%s\n' \
+    '#!/bin/bash' \
+    '# 在线获取最新脚本并执行' \
+    'SCRIPT_URL="https://raw.githubusercontent.com/eooce/ssh_tool/main/ssh_tool.sh"' \
+    > "$shortcut_path"
+create_shortcut_at "$shortcut_path" "$shortcut_entrypoint" k K free-alias >/dev/null 2>&1 || {
+    echo "Legacy shortcut migration failed." >&2
+    exit 1
+}
+grep -q '^# SSH_TOOLBOX_MANAGED_WRAPPER$' "$shortcut_path" || {
+    echo "Legacy upstream launcher was not replaced." >&2
+    exit 1
+}
+
+managed_python_prefix="${shortcut_test_root}/managed-python"
+managed_python_bin="${shortcut_test_root}/local-bin"
+mkdir -p "$managed_python_prefix/bin" "$managed_python_bin"
+printf 'managed\n' > "${managed_python_prefix}/bin/python3"
+touch "${managed_python_prefix}/.ssh-toolbox-managed"
+ln -s "${managed_python_prefix}/bin/python3" "${managed_python_bin}/python3"
+printf 'system python\n' > "${managed_python_bin}/pip3"
+remove_managed_python_install "$managed_python_prefix" "$managed_python_bin"
+[ ! -e "$managed_python_prefix" ] &&
+    { [ ! -L "${managed_python_bin}/python3" ] ||
+        [ "$(cat "${managed_python_bin}/python3")" = "managed" ]; } &&
+    [ "$(cat "${managed_python_bin}/pip3")" = "system python" ] || {
+    echo "Managed Python cleanup removed unrelated files or kept its installation." >&2
+    exit 1
+}
+unmanaged_python_prefix="${shortcut_test_root}/unmanaged-python"
+mkdir -p "$unmanaged_python_prefix"
+printf 'user install\n' > "${unmanaged_python_prefix}/user-data"
+remove_managed_python_install "$unmanaged_python_prefix" "$managed_python_bin" >/dev/null 2>&1
+[ "$(cat "${unmanaged_python_prefix}/user-data")" = "user install" ] || {
+    echo "Python cleanup removed an unmarked installation." >&2
+    exit 1
+}
+
+nat_test_root="${shortcut_test_root}/nat"
+mkdir -p "$nat_test_root"
+printf 'keep\n' > "${nat_test_root}/vm-user-data"
+qm() {
+    case "$1" in
+        list) printf 'VMID NAME\n101 test-vm\n' ;;
+        status) printf 'status: stopped\n' ;;
+        stop|destroy) printf '%s %s\n' "$1" "$2" >> "${nat_test_root}/qm.log" ;;
+    esac
+}
+iptables() { : > "${nat_test_root}/iptables.called"; }
+(cd "$nat_test_root" && nat_vm_menu <<< $'3\nDELETE\n0' >/dev/null 2>&1)
+[ "$(cat "${nat_test_root}/vm-user-data")" = "keep" ] &&
+    grep -q '^destroy 101$' "${nat_test_root}/qm.log" &&
+    [ ! -e "${nat_test_root}/iptables.called" ] || {
+    echo "KVM deletion changed unrelated files or host firewall rules." >&2
+    exit 1
+}
+unset -f qm iptables
+
+docker() {
+    case "$1 $2" in
+        "ps -aq") printf 'container-one\ncontainer-two\n' ;;
+        "rm -f") printf '%s\n' "$@" > "${nat_test_root}/docker.log" ;;
+    esac
+}
+(cd "$nat_test_root" && nat_vm_menu <<< $'8\ny\n0' >/dev/null 2>&1)
+[ ! -e "${nat_test_root}/docker.log" ] || {
+    echo "Docker deletion proceeded without the explicit DELETE confirmation." >&2
+    exit 1
+}
+(cd "$nat_test_root" && nat_vm_menu <<< $'8\nDELETE\n0' >/dev/null 2>&1)
+grep -q '^container-two$' "${nat_test_root}/docker.log" || {
+    echo "Confirmed Docker deletion did not target the listed containers." >&2
+    exit 1
+}
+unset -f docker
+rm -rf -- "$shortcut_test_root"
+
 firewall_valid_port 1 && firewall_valid_port 65535 || {
     echo "Firewall port validation rejected a valid boundary." >&2
     exit 1
@@ -133,7 +247,7 @@ if firewall_valid_port 0 || firewall_valid_port 65536 || firewall_valid_port abc
 fi
 
 installer_test_root=$(mktemp -d)
-trap 'rm -rf -- "$installer_test_root"' EXIT
+trap 'rm -rf -- "${shortcut_test_root:-}" "${installer_test_root:-}"' EXIT
 fixture_root="${installer_test_root}/fixture/ssh-toolbox-main"
 mock_bin="${installer_test_root}/bin"
 mkdir -p "$fixture_root/modules" "$mock_bin" "${installer_test_root}/home"

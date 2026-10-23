@@ -62,6 +62,8 @@ bash toolbox.sh
 
 统计默认关闭（`ENABLE_STATS=false`），关闭时不会请求在线运行次数接口。系统语言环境不会被程序强行改写。快捷命令 `k` 和 `toolbox` 指向当前项目的 `toolbox.sh`，不会切换到其他上游脚本。
 
+NAT 管理中的“删除所有 KVM/Docker”属于不可逆操作，必须输入 `DELETE` 才会继续。删除 KVM 不会清空宿主机防火墙规则、重启网络或删除当前目录文件；Docker 批量删除会影响宿主机上的全部容器。新建 Docker 小鸡使用随机 root 密码，凭据保存在 `/root/ssh-toolbox-vm-credentials.txt`，请妥善保管。环境管理仅卸载由对应系统包管理器管理的 Node.js/Java 包；Python 保留系统解释器，Go 只清理工具箱约定路径。
+
 ## 验证
 
 ```bash
@@ -69,7 +71,7 @@ bash tests/test_module_smoke.sh
 node --test tests/test_short_link_worker.mjs
 ```
 
-该检查验证所有 Shell 文件语法，并确认主菜单引用的模块及入口函数可加载。
+该检查验证所有 Shell 文件语法、菜单返回行为、快捷入口不覆盖既有文件、Python 清理边界，以及 KVM/Docker 批量删除的确认与副作用。
 
 ## 许可证
 

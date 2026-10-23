@@ -238,7 +238,16 @@ D:/ssh-toolbox/                          (项目根目录)
 
 ### 5.3 验证状态
 
-运行 `bash tests/test_module_smoke.sh` 可检查 Bash 文件语法和主菜单模块函数加载。当前已在 Windows Git Bash 通过；尚未在 Linux VPS 验证交互菜单、包管理器、systemd、iptables、Docker 或实际安装流程。
+运行 `bash tests/test_module_smoke.sh` 可检查 Bash 文件语法、模块加载、菜单返回、快捷入口保护、Python 清理边界及 NAT 删除行为。`node --test tests/test_short_link_worker.mjs` 验证 Worker HTTP 跳转、根路径响应及错误处理。当前两组测试均已通过；尚未在 Linux VPS 验证包管理器、systemd、Proxmox、iptables、Docker 或实际安装流程。
+
+### 5.4 缺陷排查与安全修复（2026-10-24）
+
+- 模块“返回”不再递归调用主菜单；菜单 `0` 直接返回调用方。
+- 快捷入口通过工具箱标记识别所有权，保留已有的非工具箱文件及命令。
+- Python 最新版本从 Python.org 下载页提取；安装到 `/usr/local/python3`，不会替换 `/usr/bin/python3`；卸载仅清理该独立目录及指向该目录的工具箱链接。
+- Node.js 和 Java 卸载不再删除用户目录、全局模块目录或整个 JVM 路径；Go 仅在命令确认为 `/usr/local/go` 安装时清理，并使用独立的工具箱 PATH 配置文件。
+- 批量删除 KVM/Docker 必须输入 `DELETE`；KVM 操作不再清空全局 iptables 表、重启网络或删除工作目录通配文件。Docker 新建容器不再使用固定密码，凭据写入权限为 600 的 root 凭据文件。
+- 测试中加入对以上菜单返回、文件保留和删除保护行为的回归检查。
 
 ---
 

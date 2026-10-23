@@ -59,7 +59,7 @@ while true; do
         18) clear; bash <(curl -sL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) ;;
         19) clear; bash <(curl -sL https://raw.githubusercontent.com/rbiserver/ddate/main/run.sh) ;;
         20) clear; bash <(curl -sL https://gitlab.com/hemajun/agent/-/raw/main/Install.sh) ;;
-        0) main_menu ;;
+        0) return 0 ;;
         *) echo "无效的输入!" ;;
     esac
     break_end

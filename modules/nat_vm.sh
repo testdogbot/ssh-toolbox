@@ -76,15 +76,15 @@ while true; do
                         break_end
                     fi
                 else
-                    echo -e "${yellow}已取消操作...${re}"; sleep 2; main_menu
+                    echo -e "${yellow}已取消操作...${re}"; sleep 2; return 0
                 fi
             elif echo "$output" | grep -q "宿主机的环境无apt包管理器命令"; then
                 echo ""
                 echo -e "${red}你的vps系统暂不支持，请更换Debian12或Ubuntu22.04后重试${re}"
-                sleep 3; main_menu
+                sleep 3; return 0
             else
                 echo -e "${red}暂不能判定你的服务器状态，无法开设kvm小鸡，可以考虑使用LXC模式开小鸡，正在退出...${re}"
-                rm -rf /root/check_kernal.sh; sleep 3; main_menu
+                rm -rf /root/check_kernal.sh; sleep 3; return 0
             fi
             ;;
         2)
@@ -128,14 +128,45 @@ while true; do
             ;;
         3)
             clear
-            for vmid in $(qm list | awk '{if(NR>1) print $1}'); do qm stop $vmid; qm destroy $vmid; rm -rf /var/lib/vz/images/$vmid*; done
-            iptables -t nat -F; iptables -t filter -F
-            service networking restart 2>/dev/null
-            systemctl restart networking.service 2>/dev/null
-            systemctl restart ndpresponder.service 2>/dev/null
-            iptables-save | awk '{if($1=="COMMIT"){delete x}}$1=="-A"?!x[$0]++:1' | iptables-restore
-            iptables-save > /etc/iptables/rules.v4 2>/dev/null
-            rm -rf vmlog vm*; sleep 2; break_end
+            if ! command -v qm >/dev/null 2>&1; then
+                echo -e "${red}未检测到 Proxmox qm 命令，无法删除 KVM 虚拟机。${re}"
+                break_end
+                continue
+            fi
+            if ! vm_list=$(qm list); then
+                echo -e "${red}读取 Proxmox 虚拟机列表失败，未执行删除。${re}" >&2
+                break_end
+                continue
+            fi
+            mapfile -t vmids < <(printf '%s\n' "$vm_list" | awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $1}')
+            if [ "${#vmids[@]}" -eq 0 ]; then
+                echo -e "${yellow}没有检测到可删除的 KVM 虚拟机。${re}"
+                break_end
+                continue
+            fi
+            printf '将删除以下虚拟机：%s\n' "${vmids[*]}"
+            read -r -p "此操作不可撤销，请输入 DELETE 确认: " confirm
+            if [ "$confirm" = "DELETE" ]; then
+                for vmid in "${vmids[@]}"; do
+                    if ! vm_status=$(qm status "$vmid"); then
+                        echo -e "${red}无法读取虚拟机 ${vmid} 状态，已跳过。${re}" >&2
+                        continue
+                    fi
+                    if [[ "$vm_status" == *"status: running"* ]] && ! qm stop "$vmid"; then
+                        echo -e "${red}停止虚拟机 ${vmid} 失败，已跳过删除。${re}" >&2
+                        continue
+                    fi
+                    if qm destroy "$vmid"; then
+                        echo -e "${green}已删除虚拟机 ${vmid}${re}"
+                    else
+                        echo -e "${red}删除虚拟机 ${vmid} 失败，请检查 Proxmox 日志。${re}" >&2
+                    fi
+                done
+                echo -e "${yellow}未修改宿主机防火墙、网络配置或当前目录中的文件。${re}"
+            else
+                echo -e "${yellow}已取消删除。${re}"
+            fi
+            break_end
             ;;
         4)
             clear
@@ -162,18 +193,18 @@ while true; do
                         if command lxc -h &> /dev/null; then
                             sleep 1
                         else
-                            echo -e "${yellow}lxc没有软连接上，请重启系统后重新运行${re}"; sleep 2; main_menu
+                            echo -e "${yellow}lxc没有软连接上，请重启系统后重新运行${re}"; sleep 2; return 0
                         fi
                     fi
                     echo -e "${yellow}开始批量开设LXC小鸡...${re}"
                     bash <(wget -qO- --no-check-certificate https://raw.githubusercontent.com/oneclickvirt/lxd/main/scripts/build_lxd.sh)
                     sleep 2; break_end
                 else
-                    main_menu
+                    return 0
                 fi
             else
                 echo -e "${red}你的服务器不符合要求，无法开设LXC小鸡${re}"
-                sleep 3; main_menu
+                sleep 3; return 0
             fi
             ;;
         5)
@@ -213,29 +244,86 @@ while true; do
         7)
             clear
             echo -e "${yellow}开始开设Docker小鸡...${re}"
-            install_docker
-            read -p "$(echo -e ${purple}请输入要开设的Docker小鸡数量: ${re})" count
-            for i in $(seq 1 $count); do
-                docker run -d --name="vm-$i" --cpus=1 --memory=512m \
-                    -p $(shuf -i 20000-60000 -n 1):22 \
-                    -v /root/vm-$i:/root \
+            install_docker || {
+                echo -e "${red}Docker 安装或检查失败，已停止操作。${re}" >&2
+                break_end
+                continue
+            }
+            read -r -p "$(echo -e "${purple}请输入要开设的Docker小鸡数量 (1-20): ${re}")" count
+            if ! [[ "$count" =~ ^[0-9]+$ ]] || [ "$count" -lt 1 ] || [ "$count" -gt 20 ]; then
+                echo -e "${red}数量必须是 1 到 20 之间的整数。${re}"
+                break_end
+                continue
+            fi
+            if ! command -v od >/dev/null 2>&1 || ! command -v tr >/dev/null 2>&1; then
+                echo -e "${red}缺少生成随机密码所需的 od 或 tr 命令。${re}" >&2
+                break_end
+                continue
+            fi
+            for i in $(seq 1 "$count"); do
+                name="vm-$i"
+                if docker container inspect "$name" >/dev/null 2>&1; then
+                    echo -e "${yellow}容器 ${name} 已存在，跳过以保留现有容器。${re}"
+                    continue
+                fi
+                password=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n') || {
+                    echo -e "${red}无法生成随机密码，已停止创建。${re}" >&2
+                    break
+                }
+                if [ "${#password}" -ne 32 ]; then
+                    echo -e "${red}生成的随机密码长度无效，已停止创建。${re}" >&2
+                    break
+                fi
+                if ! docker run -d --name="$name" --cpus=1 --memory=512m \
+                    -p "$(shuf -i 20000-60000 -n 1):22" \
+                    -v "/root/${name}:/root" \
                     --restart unless-stopped \
                     debian:latest /bin/bash -c "apt update && apt install -y openssh-server && \
-                    echo 'root:password' | chpasswd && \
                     sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
-                    service ssh start && sleep infinity"
+                    service ssh start && sleep infinity"; then
+                    echo -e "${red}创建容器 ${name} 失败。${re}" >&2
+                    continue
+                fi
+                if ! printf 'root:%s\n' "$password" | docker exec -i "$name" chpasswd; then
+                    docker rm -f "$name" >/dev/null 2>&1 || true
+                    echo -e "${red}设置 ${name} 的随机密码失败，已清理容器。${re}" >&2
+                    continue
+                fi
+                umask 077
+                printf '容器: %s\n用户名: root\n密码: %s\nSSH映射: %s\n\n' \
+                    "$name" "$password" "$(docker port "$name" 22/tcp 2>/dev/null || echo '查询失败')" \
+                    >> /root/ssh-toolbox-vm-credentials.txt
+                chmod 600 /root/ssh-toolbox-vm-credentials.txt
+                echo -e "${green}容器 ${name} 已创建；凭据已追加至 /root/ssh-toolbox-vm-credentials.txt（权限 600）。${re}"
             done
-            echo -e "${green}已开设 $count 个Docker小鸡${re}"
             docker ps
             break_end
             ;;
         8)
             clear
-            read -p "$(echo -e ${red}确定删除所有Docker容器吗？[y/n]: ${re})" confirm
-            if [ "$confirm" == "y" ] || [ "$confirm" == "Y" ]; then
-                docker stop $(docker ps -aq) 2>/dev/null
-                docker rm $(docker ps -aq) 2>/dev/null
-                echo -e "${green}所有Docker容器已删除${re}"
+            if ! command -v docker >/dev/null 2>&1; then
+                echo -e "${red}未检测到 Docker，无法删除容器。${re}"
+            else
+                if ! container_list=$(docker ps -aq); then
+                    echo -e "${red}读取 Docker 容器列表失败，未执行删除。${re}" >&2
+                else
+                    mapfile -t container_ids <<<"$container_list"
+                    if [ -z "$container_list" ]; then
+                        echo -e "${yellow}没有检测到 Docker 容器。${re}"
+                    else
+                        echo -e "${red}将删除全部 ${#container_ids[@]} 个 Docker 容器，包括非工具箱创建的容器。${re}"
+                        read -r -p "此操作不可撤销，请输入 DELETE 确认: " confirm
+                        if [ "$confirm" = "DELETE" ]; then
+                            if docker rm -f "${container_ids[@]}"; then
+                                echo -e "${green}所有 Docker 容器已删除。${re}"
+                            else
+                                echo -e "${red}部分 Docker 容器删除失败，请检查 Docker 状态。${re}" >&2
+                            fi
+                        else
+                            echo -e "${yellow}已取消删除。${re}"
+                        fi
+                    fi
+                fi
             fi
             break_end
             ;;
@@ -258,11 +346,11 @@ while true; do
                     bash <(wget -qO- --no-check-certificate https://raw.githubusercontent.com/oneclickvirt/incus/main/scripts/build_incus.sh)
                     sleep 2; break_end
                 else
-                    main_menu
+                    return 0
                 fi
             else
                 echo -e "${red}你的服务器不符合要求，无法开设incus小鸡${re}"
-                sleep 3; main_menu
+                sleep 3; return 0
             fi
             ;;
         10)
@@ -287,7 +375,7 @@ while true; do
             esac
             break_end
             ;;
-        0) main_menu ;;
+        0) return 0 ;;
         *) echo -e "${red}无效的输入!${re}" ;;
     esac
 done

@@ -105,7 +105,7 @@ while true; do
         32) clear; remove htop iftop unzip tmux ffmpeg btop ranger gdu fzf cmatrix sl bastet nsnake ninvaders ;;
         41) clear; read -p "请输入安装的工具名（wget curl sudo htop）: " installname; install $installname ;;
         42) clear; read -p "请输入卸载的工具名（htop ufw tmux cmatrix）: " removename; remove $removename ;;
-        0)  main_menu ;;
+        0)  return 0 ;;
         *)  echo "无效的输入!" ;;
     esac
     break_end

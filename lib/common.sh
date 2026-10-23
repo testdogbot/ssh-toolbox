@@ -200,12 +200,6 @@ confirm_action() {
     [[ "$answer" == "y" || "$answer" == "Y" ]]
 }
 
-# ---- 返回主菜单 ----
-main_menu() {
-    cd ~
-    toolbox_sh
-}
-
 # ---- 检查 ROOT 权限 ----
 root_use() {
     if [[ $EUID -ne 0 ]]; then
@@ -325,23 +319,63 @@ install_dependency() {
 }
 
 # ---- 创建快捷指令 ----
-create_shortcut() {
-    local script_path="/usr/local/bin/toolbox.sh"
-    local entrypoint_path shortcut_target
-    entrypoint_path=$(readlink -f "${SCRIPT_DIR}/toolbox.sh" 2>/dev/null)
-    shortcut_target=$(readlink -f "$script_path" 2>/dev/null)
-    if [ "$entrypoint_path" != "$shortcut_target" ]; then
-        printf '#!/bin/bash\nexec bash %q "$@"\n' "${SCRIPT_DIR}/toolbox.sh" > "$script_path"
-        chmod +x "$script_path"
+create_shortcut_at() {
+    local script_path="$1"
+    local entrypoint="$2"
+    shift 2
+
+    local entrypoint_path script_target temp_path link_name link_path
+    entrypoint_path=$(readlink -f "$entrypoint" 2>/dev/null) || {
+        echo "无法解析工具箱入口: $entrypoint" >&2
+        return 1
+    }
+    script_target=$(readlink -f "$script_path" 2>/dev/null || true)
+
+    if [ -L "$script_path" ] && [ "$script_target" = "$entrypoint_path" ]; then
+        :
+    elif [ -e "$script_path" ] || [ -L "$script_path" ]; then
+        if [ ! -f "$script_path" ] ||
+            { ! grep -q '^# SSH_TOOLBOX_MANAGED_WRAPPER$' "$script_path" &&
+              ! grep -Fq 'SCRIPT_URL="https://raw.githubusercontent.com/eooce/ssh_tool/main/ssh_tool.sh"' "$script_path"; }; then
+            printf '保留已有文件，未覆盖快捷入口: %s\n' "$script_path" >&2
+            return 0
+        fi
+        temp_path="${script_path}.tmp.$$"
+        if ! printf '#!/bin/bash\n# SSH_TOOLBOX_MANAGED_WRAPPER\nexec bash %q "$@"\n' "$entrypoint_path" > "$temp_path"; then
+            rm -f -- "$temp_path"
+            return 1
+        fi
+        chmod 755 "$temp_path" && mv -f -- "$temp_path" "$script_path" || {
+            rm -f -- "$temp_path"
+            return 1
+        }
+    else
+        temp_path="${script_path}.tmp.$$"
+        if ! printf '#!/bin/bash\n# SSH_TOOLBOX_MANAGED_WRAPPER\nexec bash %q "$@"\n' "$entrypoint_path" > "$temp_path"; then
+            rm -f -- "$temp_path"
+            return 1
+        fi
+        chmod 755 "$temp_path" && mv -- "$temp_path" "$script_path" || {
+            rm -f -- "$temp_path"
+            return 1
+        }
     fi
 
-    for link_name in k K; do
-        local link_path="/usr/local/bin/$link_name"
-        if [ ! -L "$link_path" ] || [ "$(readlink "$link_path")" != "$script_path" ]; then
-            ln -sf "$script_path" "$link_path" >/dev/null 2>&1
+    for link_name in "$@"; do
+        link_path="$(dirname "$script_path")/${link_name}"
+        if [ -L "$link_path" ] && [ "$(readlink -f "$link_path" 2>/dev/null)" = "$(readlink -f "$script_path" 2>/dev/null)" ]; then
+            continue
+        elif [ -e "$link_path" ] || [ -L "$link_path" ]; then
+            printf '保留已有文件，未覆盖快捷命令: %s\n' "$link_path" >&2
+            continue
         fi
+        ln -s "$script_path" "$link_path" || return 1
     done
-    hash -r >/dev/null 2>&1
+    hash -r >/dev/null 2>&1 || true
+}
+
+create_shortcut() {
+    create_shortcut_at "/usr/local/bin/toolbox.sh" "${SCRIPT_DIR}/toolbox.sh" k K
 }
 
 # ---- 服务器重启 ----

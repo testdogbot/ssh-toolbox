@@ -48,7 +48,7 @@ while true; do
         11) clear; bash <(curl -sL bash.icu/gb5) ;;
         12) clear; curl -Lso- bench.sh | bash ;;
         13) clear; curl -L https://gitlab.com/spiritysdx/za/-/raw/main/ecs.sh -o ecs.sh && chmod +x ecs.sh && bash ecs.sh ;;
-        0)  main_menu ;;
+        0)  return 0 ;;
         *)  echo "无效的输入!" ;;
     esac
     break_end

@@ -259,7 +259,7 @@ while true; do
                 esac
             done
             ;;
-        0) main_menu ;;
+        0) return 0 ;;
         *) break ;;
     esac
 done
