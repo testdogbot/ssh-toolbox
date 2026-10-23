@@ -45,6 +45,8 @@
 
 `tests/test_module_smoke.sh` 已通过 Git Bash 验证所有 Bash 文件语法和主菜单模块函数加载。Linux VPS 上的交互、服务及系统修改测试尚未执行。
 
+公开仓库时提供 `install.sh` 作为一行命令安装入口：`bash <(curl -fsSL https://raw.githubusercontent.com/testdogbot/ssh-toolbox/main/install.sh)`。它下载 GitHub `main` 分支至 `/opt/ssh-toolbox`（sudo）或 `~/.local/share/ssh-toolbox`（普通用户），更新前备份受管理目录并拒绝覆盖非受管理目录。
+
 核心路径优化记录：只读命令和帮助不再要求 root；root 检查仅用于交互菜单及系统修改命令；`run_module` 在模块或入口加载失败时停止分派；安装包不再为每个工具触发全量系统更新，且包管理器失败会直接返回。测试覆盖 CLI 帮助/信息、模块失败保护、包安装错误传播及默认禁用统计。
 
 ### 当前项目文件清单
