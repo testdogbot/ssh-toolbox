@@ -8,15 +8,55 @@
 # 当前语言 (默认中文)
 CURRENT_LANG="cn"
 
-# 设置语言
+# 设置语言；仅接受本项目实际提供的翻译包。
 set_language() {
-    local lang="$1"
-    local lang_dir="${SCRIPT_DIR}/i18n/${lang}"
-    if [ -d "$lang_dir" ]; then
-        CURRENT_LANG="$lang"
-    else
-        CURRENT_LANG="cn"
+    local lang="$1" lang_file
+    case "$lang" in cn|en) ;; *) CURRENT_LANG="cn"; return 1 ;; esac
+    lang_file="${SCRIPT_DIR}/i18n/${lang}/messages.sh"
+    [ -r "$lang_file" ] || { CURRENT_LANG="cn"; return 1; }
+    CURRENT_LANG="$lang"
+}
+
+language_config_file() {
+    printf '%s\n' "${HOME}/.config/ssh-toolbox/language"
+}
+
+save_language() {
+    local lang="$1" config_file temp_file
+    set_language "$lang" || return 1
+    config_file=$(language_config_file)
+    mkdir -p "$(dirname "$config_file")" || return 1
+    temp_file=$(mktemp "$(dirname "$config_file")/.language.XXXXXX") || return 1
+    (umask 077; printf '%s\n' "$CURRENT_LANG" > "$temp_file") || { rm -f -- "$temp_file"; return 1; }
+    mv -f -- "$temp_file" "$config_file" || { rm -f -- "$temp_file"; return 1; }
+}
+
+load_language() {
+    local config_file saved_lang
+    if [ -n "${SSH_TOOLBOX_LANG:-}" ]; then
+        set_language "$SSH_TOOLBOX_LANG" || CURRENT_LANG="cn"
+        return 0
     fi
+    config_file=$(language_config_file)
+    if [ -r "$config_file" ]; then
+        IFS= read -r saved_lang < "$config_file" || true
+        set_language "$saved_lang" || CURRENT_LANG="cn"
+    else
+        detect_language
+    fi
+}
+
+choose_language() {
+    local choice lang
+    echo "Language / 语言: 1) 中文  2) English"
+    read -r -p "选择 / Select [1-2]: " choice
+    case "$choice" in
+        1|cn) lang=cn ;;
+        2|en) lang=en ;;
+        *) echo "Invalid choice; language unchanged."; return 1 ;;
+    esac
+    save_language "$lang" || { echo "Failed to save language preference." >&2; return 1; }
+    echo "语言已设置为 ${lang}。"
 }
 
 # 自动检测系统语言
@@ -24,12 +64,9 @@ detect_language() {
     local sys_lang
     sys_lang=$(echo "${LANG:-}" | cut -d'.' -f1 | cut -d'_' -f1)
     case "$sys_lang" in
-        zh) CURRENT_LANG="cn" ;;
-        ja) CURRENT_LANG="jp" ;;
-        ko) CURRENT_LANG="kr" ;;
-        ru) CURRENT_LANG="ru" ;;
-        fa) CURRENT_LANG="ir" ;;
-        *)  CURRENT_LANG="en" ;;
+        zh*) CURRENT_LANG="cn" ;;
+        en*) CURRENT_LANG="en" ;;
+        *) CURRENT_LANG="cn" ;;
     esac
 }
 
@@ -54,4 +91,4 @@ t() {
 }
 
 # 初始化语言
-detect_language
+load_language

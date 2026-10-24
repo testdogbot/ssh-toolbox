@@ -39,7 +39,7 @@
 | 3 | 构建核心框架 | ✅ 完成 | 创建了 `toolbox.sh`(7.1KB)、`lib/common.sh`(11.1KB)、`lib/stats.sh`(1.5KB)、`lib/i18n.sh`(1.4KB) |
 | 4 | ssh_tool 独有模块 | ✅ 完成 | 7个模块文件：component_manage、warp_manager、node_setup、test_scripts、oracle_cloud、env_manage、nat_vm |
 | 5 | 重叠功能模块 | ✅ 基础入口完成 | 11 个模块已创建；按系统能力范围实现，不等同于上游全量功能 |
-| 6 | 独有功能模块 | 🔶 部分完成 | AI、网络优化、游戏和集群入口已创建；KPanel 容器管理与本地应用市场可用；自动部署和远程应用目录未接入 |
+| 6 | 独有功能模块 | 🔶 部分完成 | AI、网络优化、游戏和集群入口已创建；KPanel 容器管理与本地应用市场可用；已接入 KPanel 固定版本部署向导和 HTTPS 远程应用目录；KPanel 尚未做 Linux VPS 实机安装验证 |
 | 7 | 文档编写 | ✅ 基础文档完成 | README.md、CONTRIBUTING.md、update_log.sh 已有 |
 | 8 | 交接文档 | ✅ 本次 | 本文档 |
 
@@ -156,7 +156,7 @@ D:/ssh-toolbox/                          (项目根目录)
 | 16 | 服务器集群控制 ▶ | ssh_tool | modules/cluster.sh | ✅ |
 | 17 | AI 工具管理 ▶ | kejilion | modules/ai_tools.sh | ✅ |
 | 18 | 网络优化 ▶ | kejilion | modules/network_optimize.sh | ✅ |
-| 19 | KPanel Web 面板 ▶ | kejilion | modules/kpanel.sh | 🔶 容器管理；自动部署待补 |
+| 19 | KPanel Web 面板 ▶ | kejilion | modules/kpanel.sh | 🔶 容器管理与 v1.27.2 固定版本部署向导；实机验证待补 |
 | 20 | 游戏开服脚本 ▶ | kejilion | modules/games_server.sh | ✅ |
 | 00 | 脚本更新 | - | (toolbox.sh 内置) | ✅ |
 | 88 | 退出 | - | (toolbox.sh 内置) | ✅ |
@@ -226,13 +226,16 @@ D:/ssh-toolbox/                          (项目根目录)
 
 ### 5.1 已补齐的模块入口
 
+近期对照上游后的补全：主菜单与核心菜单提供 cn/en 切换；应用市场支持 HTTPS TSV 索引、摘要校验和来源记录；KPanel 支持固定 v1.27.2 发布资产校验、官方只读预检（可指定无路由冲突 RFC1918 `/28`）、dry-run 与双重确认安装。KPanel 流程尚未在 Linux VPS 实机安装验证。
+
 重叠功能的 11 个模块和独有功能的 6 个模块文件均已创建。主菜单 20 个入口可加载并解析；AI、网络优化、游戏及 WARP 等入口调用项目内已有脚本。Docker、系统更新/清理、基础防火墙、Certbot、BBR、备份恢复和 SSH 集群功能提供独立实现。
 
 ### 5.2 尚未完成的功能
 
-- KPanel：已有容器支持查看、启动、停止、重启、日志和资源查看；自动部署仍未集成，需按官方文档部署以避免覆盖已有服务。
-- 应用市场：可列出并运行项目 `apps/` 与 `scripts/` 下的本地 `.sh` 脚本；当前不提供远程应用仓库或自动安装第三方应用。
-- 多语言：`i18n/cn/messages.sh` 和 `i18n/en/messages.sh` 已建立基础键，主菜单仍以中文为主，尚未完成全量接入。
+- KPanel：已有容器支持查看、启动、停止、重启、日志和资源查看；部署向导已加入 v1.27.2 固定发布资产校验、官方只读预检、dry-run 和双重确认。Linux VPS 实机安装仍未验证。SSL 菜单明确阻止调用两份上游自动续期脚本；一份可能删除 Certbot lineage 并停止/重载 Nginx，另一份会清空主机防火墙规则。
+- SSH 集群控制：从 `~/.ssh/config` 筛选非通配别名；连接前用 BatchMode、5 秒超时和 SSH ControlMaster 做不执行远端命令的握手检查，成功后询问是否启动交互会话。密码交互认证目标无法通过非交互探测。
+- 应用市场：保留 `apps/` 与 `scripts/` 本地脚本流程；新增用户配置 HTTPS TSV 索引、受限相对路径、SHA-256/Bash 语法校验、1 MiB 大小上限和不覆盖下载。远程脚本只落入 `apps/`，执行前继续展示来源并请求确认。
+- 多语言：新增 cn/en 持久化选择和 `SSH_TOOLBOX_LANG` 会话覆盖；主菜单及系统工具、集群、应用市场、KPanel 高优先菜单接入中英文。其余模块仍以中文为主，不宣称全项目翻译完成。
 - 在线更新：已安装工具箱可通过主菜单 `00` 调用安装器更新到 GitHub `main`，替换前备份旧目录；源码克隆目录拒绝原位更新。自动更新计划任务仍未实现，菜单会明确提示且不更改系统设置。
 - 破坏性功能：系统重装未集成；LDNMP 上游脚本会变更系统和防火墙，入口会提示并要求确认。
 

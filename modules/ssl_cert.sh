@@ -40,6 +40,7 @@ ssl_cert_menu() {
         echo "2. 查看证书"
         echo "3. 测试自动续期"
         echo "4. 执行证书续期"
+        echo "5. KPanel 上游自动续期（未启用：脚本有破坏性副作用）"
         echo "0. 返回主菜单"
         read -r -p "请选择: " choice
         case "$choice" in
@@ -47,6 +48,11 @@ ssl_cert_menu() {
             2) ssl_ps ;;
             3) certbot renew --dry-run ;;
             4) confirm_action "执行 certbot renew?" && certbot renew ;;
+            5)
+                echo "KPanel 上游自动续期暂未接入。该脚本可能删除现有 Certbot 证书 lineage，并停止/重载 Nginx；续期失败时的处理也未经验证。"
+                echo "请勿直接运行 scripts/auto_cert_renewal.sh；另一个旧脚本会清空主机防火墙规则。"
+                return 1
+                ;;
             0) return 0 ;;
             *) echo "无效的输入。" ;;
         esac

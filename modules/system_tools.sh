@@ -21,17 +21,17 @@ system_tools_menu() {
     local choice key_line key_type
     while true; do
         clear
-        echo "▶ 系统工具"
-        echo "1. 查看 SSH 服务状态"
-        echo "2. 查看 SSH authorized_keys"
-        echo "3. 添加 SSH 公钥"
-        echo "4. 查看 SSH 端口及 DNS"
-        echo "5. 查看 Swap"
-        echo "6. 防火墙管理"
-        echo "7. 备份与恢复"
-        echo "8. 重启服务器"
-        echo "9. 系统重装说明"
-        echo "0. 返回主菜单"
+        echo "▶ $(t menu_system_tools '系统工具')"
+        echo "1. $(t system_tools_ssh_status '查看 SSH 服务状态')"
+        echo "2. $(t system_tools_authorized_keys '查看 SSH authorized_keys')"
+        echo "3. $(t system_tools_add_ssh_key '添加 SSH 公钥')"
+        echo "4. $(t system_tools_ssh_dns '查看 SSH 端口及 DNS')"
+        echo "5. $(t system_tools_swap '查看 Swap')"
+        echo "6. $(t system_tools_firewall '防火墙管理')"
+        echo "7. $(t system_tools_backup '备份与恢复')"
+        echo "8. $(t system_tools_reboot '重启服务器')"
+        echo "9. $(t system_tools_reinstall '系统重装说明')"
+        echo "0. $(t common_back '返回主菜单')"
         read -r -p "请选择: " choice
         case "$choice" in
             1)

@@ -2,19 +2,86 @@
 # ============================================================
 # 模块: kpanel (KPanel)
 # ============================================================
+kpanel_deploy_preflight() (
+    local version=v1.27.2 release_base meta_digest image_digest arch agent_digest temp_dir archive agent_url public_url network_subnet answer installer preflight checksum_file agent_file member
+    version=v1.27.2
+    release_base="https://github.com/kejilion/KPanel/releases/download/${version}"
+    meta_digest=8b5fbac62fdc80023b23dea5c85c2e8f1b663047b429d03ac107543f41b3d43d
+    image_digest=5369dc9a2b8151314181d306e8d490939e63607d017b07c3985a0f4afb65aa10
+    case "$(uname -m)" in
+        x86_64|amd64) arch=amd64; agent_digest=2447f669ca85c1d84ed228027db1f17793fb9b98b9ad0922bf602e85e4ec8543 ;;
+        aarch64|arm64) arch=arm64; agent_digest=2753692383ab3fe19b2d408171c909a04cafaa8bc5ce83325ce78ae2c8e11737 ;;
+        *) echo "当前架构不受 KPanel ${version} 官方发布支持。" >&2; return 1 ;;
+    esac
+    read -r -p "面板公网 HTTPS 根地址（例如 https://panel.example.com）: " public_url
+    [[ "$public_url" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$ ]] || { echo "必须输入 HTTPS origin，不能包含路径。" >&2; return 1; }
+    read -r -p "Docker 私网 RFC1918 /28（留空使用 172.29.255.240/28）: " network_subnet
+    network_subnet=${network_subnet:-172.29.255.240/28}
+    [[ "$network_subnet" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/28$ ]] || { echo "私网必须是 IPv4 /28 CIDR。" >&2; return 1; }
+    temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/ssh-toolbox-kpanel.XXXXXX") || return 1
+    trap 'rm -rf -- "$temp_dir"' EXIT
+    archive="${temp_dir}/kpanel-meta.tar.gz"
+    agent_file="${temp_dir}/kejilion-agent-linux-${arch}"
+    checksum_file="${temp_dir}/SHA256SUMS"
+    if ! curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --max-filesize 5000000 --max-time 120 -o "$archive" "${release_base}/kejilion-panel-meta-1.27.2.tar.gz" ||
+        [ "$(sha256sum "$archive" | awk '{print $1}')" != "$meta_digest" ]; then
+        echo "KPanel 固定版本元数据下载或 SHA-256 校验失败。" >&2
+        return 1
+    fi
+    if ! curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --max-filesize 20000000 --max-time 120 -o "$agent_file" "${release_base}/kejilion-agent-linux-${arch}" ||
+        [ "$(sha256sum "$agent_file" | awk '{print $1}')" != "$agent_digest" ]; then
+        echo "KPanel Agent 下载或 SHA-256 校验失败。" >&2
+        return 1
+    fi
+    if ! curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --max-time 30 -o "$checksum_file" "${release_base}/SHA256SUMS" ||
+        ! grep -Eq "^${agent_digest}[[:space:]]+\*?kejilion-agent-linux-${arch}$" "$checksum_file"; then
+        echo "官方 SHA256SUMS 不匹配，拒绝部署。" >&2
+        return 1
+    fi
+    while IFS= read -r member; do
+        case "$member" in /*|../*|*/../*|*/..) echo "元数据包包含不安全路径。" >&2; return 1 ;; esac
+    done < <(tar -tzf "$archive")
+    mkdir "${temp_dir}/meta" || return 1
+    tar --no-same-owner --no-same-permissions -xzf "$archive" -C "${temp_dir}/meta" || return 1
+    installer=$(find "${temp_dir}/meta" -type f -path '*/deploy/install.sh' -print -quit)
+    preflight=$(find "${temp_dir}/meta" -type f -path '*/deploy/preflight.sh' -print -quit)
+    [ -n "$installer" ] && [ -n "$preflight" ] || { echo "固定版本元数据缺少官方安装器或预检脚本。" >&2; return 1; }
+    echo "已取得官方 KPanel ${version} 元数据、${arch} Agent 和固定镜像 digest，并校验 SHA-256。"
+    echo "运行官方只读预检：${preflight} --public-url ${public_url} --network-subnet ${network_subnet}"
+    if ! sh "$preflight" --public-url "$public_url" --network-subnet "$network_subnet"; then
+        echo "官方预检未通过；没有调用安装器。"
+        return 1
+    fi
+    echo "部署会新增 KPanel 专用文件、服务、容器与网络；不会修改 kejilion.sh、/home/web、Nginx 配置或防火墙。"
+    echo "将先运行官方安装器 --dry-run，再在明确确认后进行实际安装。"
+    read -r -p "确认继续请输入 INSTALL: " answer
+    [ "$answer" = INSTALL ] || { echo "已取消；未安装 KPanel。"; return 1; }
+    if ! sh "$installer" --agent-binary "$agent_file" --agent-sha256 "$agent_digest" \
+        --image "docker.io/kjlion/kejilion-panel@sha256:${image_digest}" \
+        --public-url "$public_url" --network-subnet "$network_subnet" --dry-run; then
+        echo "官方安装器 dry-run 失败；没有执行实际安装。" >&2
+        return 1
+    fi
+    read -r -p "Dry-run 通过。实际安装会写入系统服务并启动容器；再次输入 INSTALL 执行: " answer
+    [ "$answer" = INSTALL ] || { echo "已取消；仅完成 dry-run。"; return 1; }
+    sh "$installer" --agent-binary "$agent_file" --agent-sha256 "$agent_digest" \
+        --image "docker.io/kjlion/kejilion-panel@sha256:${image_digest}" \
+        --public-url "$public_url" --network-subnet "$network_subnet"
+)
 kpanel_menu() {
     local choice container_list target input container_id container_name action
     local -a containers
     while true; do
         clear
-        echo "▶ KPanel Web 面板"
-        echo "1. 查看 KPanel 容器"
-        echo "2. 启动 KPanel 容器"
-        echo "3. 停止 KPanel 容器"
-        echo "4. 重启 KPanel 容器"
-        echo "5. 查看最近容器日志"
-        echo "6. 查看容器资源使用"
-        echo "7. 查看官方部署说明"
+        echo "▶ $(t kpanel_title 'KPanel Web 面板')"
+        echo "1. $(t kpanel_list '查看 KPanel 容器')"
+        echo "2. $(t kpanel_start '启动 KPanel 容器')"
+        echo "3. $(t kpanel_stop '停止 KPanel 容器')"
+        echo "4. $(t kpanel_restart '重启 KPanel 容器')"
+        echo "5. $(t kpanel_logs '查看最近容器日志')"
+        echo "6. $(t kpanel_stats '查看容器资源使用')"
+        echo "7. $(t kpanel_docs '查看官方部署说明')"
+        echo "8. $(t kpanel_preflight '校验固定版发布资产并部署（预检和两次确认）')"
         echo "0. 返回主菜单"
         read -r -p "请选择: " choice
         case "$choice" in
@@ -96,6 +163,7 @@ kpanel_menu() {
                 echo "KPanel 官方说明: https://github.com/kejilion/KPanel"
                 echo "部署方式和要求请以官方文档为准；本工具不会自动覆盖现有服务。"
                 ;;
+            8) kpanel_deploy_preflight ;;
             0) return 0 ;;
             *) echo "无效的输入。" ;;
         esac

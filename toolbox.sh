@@ -41,18 +41,18 @@ echo -e "${gl_huang}支持 Ubuntu/Debian/CentOS/Alpine/Fedora/Rocky/Almalinux/Or
 echo ""
 echo -e "${gl_kjlan}快捷键已设置为 ${gl_huang}k, ${gl_kjlan}下次运行输入 ${gl_huang}k ${gl_kjlan}可快速启动此脚本${gl_bai}"
 echo -e "${gl_kjlan}-------------------------------------------------------------------${gl_bai}"
-echo -e "${gl_lv} 1. 系统信息查询              11. 节点搭建合集 ▶          ${gl_bai}"
-echo -e "${gl_lv} 2. 系统更新                  12. NAT小鸡管理 ▶           ${gl_bai}"
-echo -e "${gl_lv} 3. 系统清理                  13. 甲骨文云合集 ▶          ${gl_bai}"
-echo -e "${gl_lv} 4. 组件管理 ▶                14. 常用环境管理 ▶          ${gl_bai}"
-echo -e "${gl_lv} 5. BBR 加速管理              15. 测试脚本合集 ▶          ${gl_bai}"
-echo -e "${gl_lv} 6. Docker 管理 ▶             16. 服务器集群控制 ▶        ${gl_bai}"
-echo -e "${gl_lv} 7. WARP 管理 ▶               17. AI 工具管理 ▶           ${gl_bai}"
-echo -e "${gl_huang} 8. LDNMP 建站 ▶              18. 网络优化 ▶              ${gl_bai}"
-echo -e "${gl_lv} 9. 面板工具与应用 ▶          19. KPanel Web 面板 ▶      ${gl_bai}"
-echo -e "${gl_lv}10. 系统工具 ▶                20. 游戏开服脚本 ▶          ${gl_bai}"
+echo -e "${gl_lv} 1. $(t main_system_info '系统信息查询')      11. $(t main_nodes '节点搭建合集') ▶      ${gl_bai}"
+echo -e "${gl_lv} 2. $(t main_system_update '系统更新')          12. $(t main_nat 'NAT小鸡管理') ▶       ${gl_bai}"
+echo -e "${gl_lv} 3. $(t main_system_clean '系统清理')          13. $(t main_oracle '甲骨文云合集') ▶      ${gl_bai}"
+echo -e "${gl_lv} 4. $(t main_components '组件管理') ▶        14. $(t main_env '常用环境管理') ▶      ${gl_bai}"
+echo -e "${gl_lv} 5. $(t main_bbr 'BBR 加速管理')          15. $(t main_tests '测试脚本合集') ▶      ${gl_bai}"
+echo -e "${gl_lv} 6. $(t main_docker 'Docker 管理') ▶       16. $(t main_cluster '服务器集群控制') ▶  ${gl_bai}"
+echo -e "${gl_lv} 7. $(t main_warp 'WARP 管理') ▶          17. $(t main_ai 'AI 工具管理') ▶         ${gl_bai}"
+echo -e "${gl_huang} 8. $(t main_ldnmp 'LDNMP 建站') ▶        18. $(t main_network '网络优化') ▶       ${gl_bai}"
+echo -e "${gl_lv} 9. $(t main_panels '面板工具与应用') ▶  19. $(t main_kpanel 'KPanel Web 面板') ▶ ${gl_bai}"
+echo -e "${gl_lv}10. $(t main_system_tools '系统工具') ▶    20. $(t main_games '游戏开服脚本') ▶    ${gl_bai}"
 echo -e "${gl_kjlan}-------------------------------------------------------------------${gl_bai}"
-echo -e "${gl_kjlan}00. 脚本更新     88. 退出脚本${gl_bai}"
+echo -e "${gl_kjlan}00. $(t main_update '脚本更新')     77. $(t main_language '语言 / Language')     88. $(t main_exit '退出脚本')${gl_bai}"
 echo -e "${gl_huang}-------------------------------------------------------------------${gl_bai}"
 read -p "$(echo -e ${gl_hong}请输入你的选择: ${gl_bai})" choice
 
@@ -78,6 +78,7 @@ case "$choice" in
   19) run_module kpanel kpanel_menu ;;
   20) run_module games_server games_server_menu ;;
   00) toolbox_update ;;
+  77) choose_language ;;
   88) clear; exit ;;
   *)  echo "无效的输入!" ;;
 esac
@@ -161,7 +162,8 @@ else
                 "卸载软件包: toolbox.sh remove nano wget" \
                 "更新系统: toolbox.sh update" \
                 "Docker管理: toolbox.sh docker [ps|img|install]" \
-                "应用市场: toolbox.sh app"
+                "应用市场: toolbox.sh app" \
+                "语言设置: 在主菜单选择 77，或设置 SSH_TOOLBOX_LANG=cn|en"
             ;;
         *)
             echo "SSH Toolbox v${TOOLBOX_VERSION}"
